@@ -4,23 +4,39 @@ import { io } from "socket.io-client";
 const socket = io("http://localhost:3001");
 
 function App() {
+  const [nome, setNome] = useState("");
+  const [entrando, setEntrando] = useState(false);
   const [estado, setEstado] = useState(null);
 
   useEffect(() => {
-    socket.connect(); // Garante que reconecte se estiver desconectado
+    if (entrando) {
+      socket.emit("entrarNaSala", { salaId: "sala123", nome });
 
-    socket.emit("entrarNaSala", { salaId: "sala123", nome: "Robson" });
+      socket.on("estadoAtualizado", (dados) => {
+        setEstado(dados);
+      });
 
-    socket.on("estadoAtualizado", (dados) => {
-      setEstado(dados);
-    });
+      // Cleanup
+      return () => {
+        socket.off("estadoAtualizado");
+      };
+    }
+  }, [entrando, nome]);
 
-    return () => {
-      socket.off("estadoAtualizado");
-      socket.disconnect();
-    };
-  }, []);
-
+  if (!entrando) {
+    return (
+      <div>
+        <h2>Digite seu nome para entrar na sala</h2>
+        <input
+          type="text"
+          value={nome}
+          onChange={(e) => setNome(e.target.value)}
+          placeholder="Seu nome"
+        />
+        <button onClick={() => nome.trim() && setEntrando(true)}>Entrar</button>
+      </div>
+    );
+  }
   return (
     <div>
       <h1>Bohnanza Online</h1>
