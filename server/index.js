@@ -144,9 +144,15 @@ io.on("connection", (socket) => {
     for (const salaId in salas) {
       const sala = salas[salaId];
       const idx = sala.jogadores.findIndex((j) => j.id === socket.id);
+
       if (idx !== -1) {
         sala.jogadores.splice(idx, 1);
-        io.to(salaId).emit("estadoAtualizado", sala);
+
+        if (sala.jogadores.length === 0) {
+          delete salas[salaId];
+        } else {
+          io.to(salaId).emit("estadoAtualizado", sala);
+        }
       }
     }
   });
