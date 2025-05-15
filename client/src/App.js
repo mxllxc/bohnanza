@@ -8,6 +8,7 @@ function App() {
   const [salaId, setSalaId] = useState("sala123");
   const [entrando, setEntrando] = useState(false);
   const [estado, setEstado] = useState(null);
+  const [meuId, setMeuId] = useState("");
 
   useEffect(() => {
     if (entrando) {
@@ -15,6 +16,7 @@ function App() {
 
       socket.on("estadoAtualizado", (dados) => {
         setEstado(dados);
+        setMeuId(socket.id);
       });
 
       // Cleanup
@@ -23,6 +25,10 @@ function App() {
       };
     }
   }, [entrando, nome]);
+
+  const meuJogador = estado?.jogadores.find(j => j.id === meuId)
+  
+  console.log(estado);
 
   if (!entrando) {
     return (
@@ -44,8 +50,6 @@ function App() {
       </div>
     );
   }
-
-  console.log(estado);
   
   return (
     <div>
@@ -57,21 +61,22 @@ function App() {
           <ul>
             {estado.jogadores.map((jogador) => (
               <li key={jogador.id}>
-                <strong>{jogador.nome}</strong>
-                <br />
-                Cartas na mão:
-                <ul>
-                  {jogador.mao && jogador.mao.length > 0 ? (
-                    jogador.mao.map((carta, idx) => (
-                      <li key={idx}>{carta.tipo}</li>
-                    ))
-                  ) : (
-                    <li>Sem cartas</li>
-                  )}
-                </ul>
+                {jogador.id === meuId ? jogador.nome + " (Você)" : jogador.nome}
               </li>
             ))}
           </ul>
+
+          {/* MOSTRA APENAS SUAS CARTAS */}
+          {meuJogador && (
+            <div>
+              <h2>Suas cartas:</h2>
+              <ul>
+                {meuJogador.mao.map((carta, index) => (
+                  <li key={index}>{carta.tipo}</li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       )}
     </div>
