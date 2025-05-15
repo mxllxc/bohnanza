@@ -5,12 +5,13 @@ const socket = io("http://localhost:3001");
 
 function App() {
   const [nome, setNome] = useState("");
+  const [salaId, setSalaId] = useState("sala123");
   const [entrando, setEntrando] = useState(false);
   const [estado, setEstado] = useState(null);
 
   useEffect(() => {
     if (entrando) {
-      socket.emit("entrarNaSala", { salaId: "sala123", nome });
+      socket.emit("entrarNaSala", { salaId, nome });
 
       socket.on("estadoAtualizado", (dados) => {
         setEstado(dados);
@@ -33,19 +34,42 @@ function App() {
           onChange={(e) => setNome(e.target.value)}
           placeholder="Seu nome"
         />
+        <input
+          type="text"
+          value={salaId}
+          onChange={(e) => setSalaId(e.target.value)}
+          placeholder="Seu nome"
+        />
         <button onClick={() => nome.trim() && setEntrando(true)}>Entrar</button>
       </div>
     );
   }
+
+  console.log(estado);
+  
   return (
     <div>
-      <h1>Bohnanza Online</h1>
+      <h1>Bohnanza Online - Sala: {salaId}</h1>
+
       {estado && (
         <div>
-          Jogadores na sala:
+          <h2>Jogadores na sala:</h2>
           <ul>
             {estado.jogadores.map((jogador) => (
-              <li key={jogador.id}>{jogador.nome}</li>
+              <li key={jogador.id}>
+                <strong>{jogador.nome}</strong>
+                <br />
+                Cartas na mão:
+                <ul>
+                  {jogador.mao && jogador.mao.length > 0 ? (
+                    jogador.mao.map((carta, idx) => (
+                      <li key={idx}>{carta.tipo}</li>
+                    ))
+                  ) : (
+                    <li>Sem cartas</li>
+                  )}
+                </ul>
+              </li>
             ))}
           </ul>
         </div>

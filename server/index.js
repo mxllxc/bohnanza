@@ -11,7 +11,38 @@ const io = new Server(server, {
   }
 });
 
+// Define o baralho base do Bohnanza
+const baralhoBase = [
+  { tipo: "Feijão Vermelho", quantidade: 24 },
+  { tipo: "Feijão Preto", quantidade: 22 },
+  { tipo: "Feijão Verde", quantidade: 20 },
+  { tipo: "Feijão Amarelo", quantidade: 18 },
+  { tipo: "Feijão Marrom", quantidade: 16 },
+  { tipo: "Feijão Azul", quantidade: 14 },
+  { tipo: "Feijão Roxo", quantidade: 12 },
+  { tipo: "Feijão Branco", quantidade: 10 }
+];
+
 const salas = {}; // Aqui ficam os dados das partidas
+
+// Função para criar e embaralhar o baralho
+function criarBaralho() {
+  const baralho = [];
+
+  baralhoBase.forEach(({ tipo, quantidade }) => {
+    for (let i = 0; i < quantidade; i++) {
+      baralho.push({ tipo });
+    }
+  });
+
+  // Embaralhar (Fisher-Yates)
+  for (let i = baralho.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [baralho[i], baralho[j]] = [baralho[j], baralho[i]];
+  }
+
+  return baralho;
+}
 
 io.on("connection", (socket) => {
   console.log("Novo jogador conectado:", socket.id);
@@ -20,31 +51,49 @@ io.on("connection", (socket) => {
     if (!salas[salaId]) {
       salas[salaId] = {
         jogadores: [],
-        baralho: [],
+        baralho: criarBaralho(), // já cria o baralho na criação da sala
         estado: "esperando",
       };
     }
 
-    salas[salaId].jogadores.push({ id: socket.id, nome });
-    socket.join(salaId);
+    const sala = salas[salaId];
 
-    io.to(salaId).emit("estadoAtualizado", salas[salaId]);
+    // Evita adicionar o mesmo jogador duas vezes
+    if (!sala.jogadores.find(j => j.id === socket.id)) {
+      const jogador = { id: socket.id, nome, mao: [] };
+
+      // Dá 5 cartas ao jogador novo
+      for (let i = 0; i < 5; i++) {
+        const carta = sala.baralho.pop();
+        if (carta) jogador.mao.push(carta);
+      }
+
+      sala.jogadores.push(jogador);
+      socket.join(salaId);
+    }
+
+    // Marca que o jogo começou se ainda estiver como "esperando"
+    if (sala.estado === "esperando") {
+      sala.estado = "em andamento";
+    }
+
+    io.to(salaId).emit("estadoAtualizado", sala);
   });
 
   socket.on("disconnect", () => {
-    // Remover o jogador da sala
-    for (const salaId in salas) {
-      salas[salaId].jogadores = salas[salaId].jogadores.filter(j => j.id !== socket.id);
+    console.log("Jogador desconectou:", socket.id);
 
-      // Se a sala ficar vazia, apaga
-      if (salas[salaId].jogadores.length === 0) {
-        delete salas[salaId];
-      } else {
-        io.to(salaId).emit("estadoAtualizado", salas[salaId]);
+    for (const salaId in salas) {
+      const sala = salas[salaId];
+      const idx = sala.jogadores.findIndex((j) => j.id === socket.id);
+      if (idx !== -1) {
+        sala.jogadores.splice(idx, 1);
+        io.to(salaId).emit("estadoAtualizado", sala);
       }
     }
   });
 });
+
 
 server.listen(3001, () => {
   console.log("Servidor rodando na porta 3001");
