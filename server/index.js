@@ -45,7 +45,6 @@ function criarBaralho() {
 }
 
 io.on("connection", (socket) => {
-  console.log("Novo jogador conectado:", socket.id);
 
   socket.on("entrarNaSala", ({ salaId, nome }) => {
     if (!salas[salaId]) {
@@ -53,6 +52,7 @@ io.on("connection", (socket) => {
         jogadores: [],
         baralho: criarBaralho(), // já cria o baralho na criação da sala
         estado: "esperando",
+        turnoAtual: null, // ID do jogador da vez
       };
     }
 
@@ -60,7 +60,7 @@ io.on("connection", (socket) => {
 
     // Evita adicionar o mesmo jogador duas vezes
     if (!sala.jogadores.find(j => j.id === socket.id)) {
-      const jogador = { id: socket.id, nome, mao: [] };
+      const jogador = { id: socket.id, nome, mao: [], campos: [[], []] };
 
       // Dá 5 cartas ao jogador novo
       for (let i = 0; i < 5; i++) {
@@ -75,9 +75,67 @@ io.on("connection", (socket) => {
     // Marca que o jogo começou se ainda estiver como "esperando"
     if (sala.estado === "esperando") {
       sala.estado = "em andamento";
+      sala.turnoAtual = sala.jogadores[0].id;
     }
 
+    sala.jogadores.forEach((jogador) => {
+      const estadoPersonalizado = {
+        jogadores: sala.jogadores.map(j => ({
+          id: j.id,
+          nome: j.nome,
+          mao: j.id === jogador.id ? j.mao : [], // só mostra a própria mão
+          campos: [[], []]
+        })),
+        estado: sala.estado,
+        cartasRestantes: sala.baralho.length,
+        turnoAtual: sala.turnoAtual
+      };
+
+      io.to(jogador.id).emit("estadoAtualizado", estadoPersonalizado);
+    });
+  });
+
+  socket.on("passarTurno", (salaId) => {
+    const sala = salas[salaId];
+    if (!sala) return;
+
+    if (socket.id !== sala.turnoAtual) return; // segurança
+
+    const idxAtual = sala.jogadores.findIndex(j => j.id === sala.turnoAtual);
+    const proximo = (idxAtual + 1) % sala.jogadores.length;
+
+    sala.turnoAtual = sala.jogadores[proximo].id;
+
     io.to(salaId).emit("estadoAtualizado", sala);
+  });
+
+  socket.on("plantarCarta", ({ salaId, campoIndex }) => {
+    const sala = salas[salaId];
+    const jogador = sala?.jogadores.find(j => j.id === socket.id);
+    if (!sala || !jogador) return;
+
+    if (typeof jogador.plantiosRealizados === "undefined") {
+      jogador.plantiosRealizados = 0;
+    }
+
+    // Impede plantar mais que 2 vezes
+    if (jogador.plantiosRealizados >= 2) return;
+
+    const carta = jogador.mao[0];
+    if (!carta) return;
+
+    const campo = jogador.campos[campoIndex];
+    if (!campo) return;
+
+    // Verifica se pode plantar no campo
+    if (campo.length === 0 || campo[0].tipo === carta.tipo) {
+      campo.push(carta);
+      jogador.mao.shift();
+      jogador.plantiosRealizados += 1;
+      io.to(salaId).emit("estadoAtualizado", sala);
+    } else {
+      console.log("Tipo incompatível com o campo.");
+    }
   });
 
   socket.on("disconnect", () => {
