@@ -23,6 +23,17 @@ const baralhoBase = [
   { tipo: "Feijão Branco", quantidade: 10 }
 ];
 
+const pontuacaoFeijoes = {
+  "Feijão Vermelho": [0, 2, 3, 4],
+  "Feijão Preto": [0, 2, 3, 4],
+  "Feijão Verde": [0, 2, 3, 4],
+  "Feijão Amarelo": [0, 2, 3, 4],
+  "Feijão Marrom": [0, 2, 3],
+  "Feijão Azul": [0, 2, 3],
+  "Feijão Roxo": [0, 2, 3],
+  "Feijão Branco": [0, 2, 3],
+};
+
 const salas = {}; // Aqui ficam os dados das partidas
 
 // Função para criar e embaralhar o baralho
@@ -79,6 +90,33 @@ function plantarCartas(jogador, cartas) {
   });
 }
 
+function colherCampo(jogador, indiceCampo) {
+  const campo = jogador.campos[indiceCampo];
+  if (!campo || campo.length === 0) return;
+
+  const tipo = campo[0].tipo;
+  const qtd = campo.length;
+  const valores = pontuacaoFeijoes[tipo] || [];
+
+  // Busca maior número de moedas possível com qtd de cartas
+  let moedas = 0;
+  for (let i = valores.length - 1; i >= 0; i--) {
+    if (qtd >= valores[i]) {
+      moedas = i; // i moedas
+      break;
+    }
+  }
+
+  // Salva as moedas (pode ser representado como número ou array)
+  jogador.moedas = (jogador.moedas || 0) + moedas;
+
+  // Remove cartas usadas para moedas (descarta o restante)
+  campo.splice(0, valores[moedas] || 0);
+  
+  // Limpa o campo
+  jogador.campos[indiceCampo] = [];
+}
+
 io.on("connection", (socket) => {
 
   socket.on("entrarNaSala", ({ salaId, nome }) => {
@@ -97,7 +135,7 @@ io.on("connection", (socket) => {
 
     // Evita adicionar o mesmo jogador duas vezes
     if (!sala.jogadores.find(j => j.id === socket.id)) {
-      const jogador = { id: socket.id, nome, mao: [], campos: [[], []] };
+      const jogador = { id: socket.id, nome, mao: [], campos: [[], []], moedas: 0, plantiosRealizados: 0 };
 
       // Dá 5 cartas ao jogador novo
       for (let i = 0; i < 5; i++) {
@@ -122,6 +160,7 @@ io.on("connection", (socket) => {
           nome: j.nome,
           mao: j.id === jogador.id ? j.mao : [], // só mostra a própria mão
           campos: j.id === jogador.id ? j.campos : [[],[]],
+          moedas: j.moedas || 0,
           plantiosRealizados: j.plantiosRealizados || 0
         })),
         estado: sala.estado,
@@ -198,7 +237,6 @@ io.on("connection", (socket) => {
   socket.on("plantarCartasMesa", ({ salaId, cartas }) => {
     const sala = salas[salaId];
     const jogador = sala.jogadores.find(j => j.id === socket.id)
-    console.log(jogador)
     removerCartas(jogador, cartas, sala);
     plantarCartas(jogador, cartas)
     io.to(salaId).emit("estadoAtualizado", sala);
@@ -272,6 +310,18 @@ io.on("connection", (socket) => {
     } else {
       proposta.status = "recusada";
     }
+    io.to(salaId).emit("estadoAtualizado", sala);
+  });
+
+  socket.on("colherCampo", ({ salaId, campoIndex }) => {
+    const sala = salas[salaId];
+    if (!sala) return;
+
+    const jogador = sala.jogadores.find(j => j.id === socket.id);
+    if (!jogador) return;
+
+    colherCampo(jogador, campoIndex);
+
     io.to(salaId).emit("estadoAtualizado", sala);
   });
 

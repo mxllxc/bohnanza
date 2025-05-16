@@ -113,7 +113,8 @@ function App() {
               <li key={jogador.id}>
                 {jogador.nome}
                 {jogador.id === socketId && " (Você)"}
-                {jogador.id === estado.turnoAtual && " 🎯 Turno"}
+                {jogador.id === estado.turnoAtual && " 🎯 Turno "}
+                Moedas - {jogador.moedas}
               </li>
             ))}
           </ul>
@@ -248,6 +249,9 @@ function App() {
                 {campo.length === 0
                   ? "Vazio"
                   : `${campo[0]?.tipo} (${campo.length} cartas)`}
+                  <button onClick={() => socket.emit("colherCampo", { salaId, campoIndex: i })}>
+                    Colher
+                  </button>
               </div>
             ))}
           </div>
