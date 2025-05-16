@@ -73,6 +73,23 @@ function App() {
             ))}
           </ul>
 
+          {estado.cartasViradas?.length > 0 && (
+            <div>
+              <h3>Cartas Viradas</h3>
+              <ul>
+                {estado.cartasViradas.map((carta, index) => (
+                  <li key={index}>{carta.tipo}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {socketId === estado.turnoAtual &&
+            estado.jogadores.find(j => j.id === socketId)?.plantiosRealizados >= 1 && (
+              <button onClick={() => socket.emit("virarCartas", salaId)}>
+                Virar 2 cartas
+              </button>
+          )}
+
           <h2>Minhas cartas:</h2>
           <ul>
             {estado.jogadores.find(j => j.id === socketId)?.mao.map((carta, i) => (

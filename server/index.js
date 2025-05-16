@@ -53,6 +53,7 @@ io.on("connection", (socket) => {
         baralho: criarBaralho(), // já cria o baralho na criação da sala
         estado: "esperando",
         turnoAtual: null, // ID do jogador da vez
+        cartasViradas: [],
       };
     }
 
@@ -84,11 +85,13 @@ io.on("connection", (socket) => {
           id: j.id,
           nome: j.nome,
           mao: j.id === jogador.id ? j.mao : [], // só mostra a própria mão
-          campos: [[], []]
+          campos: [[], []],
+          plantiosRealizados: j.plantiosRealizados || 0
         })),
         estado: sala.estado,
         cartasRestantes: sala.baralho.length,
-        turnoAtual: sala.turnoAtual
+        turnoAtual: sala.turnoAtual,
+        cartasViradas: sala.cartasViradas,
       };
 
       io.to(jogador.id).emit("estadoAtualizado", estadoPersonalizado);
@@ -105,6 +108,11 @@ io.on("connection", (socket) => {
     const proximo = (idxAtual + 1) % sala.jogadores.length;
 
     sala.turnoAtual = sala.jogadores[proximo].id;
+    sala.cartasViradas = [];
+
+    sala.jogadores.forEach(j => {
+      j.plantiosRealizados = 0;
+    });
 
     io.to(salaId).emit("estadoAtualizado", sala);
   });
@@ -112,7 +120,7 @@ io.on("connection", (socket) => {
   socket.on("plantarCarta", ({ salaId, campoIndex }) => {
     const sala = salas[salaId];
     const jogador = sala?.jogadores.find(j => j.id === socket.id);
-    if (!sala || !jogador) return;
+    if (!sala || !jogador || sala.cartasViradas.length > 0) return;
 
     if (typeof jogador.plantiosRealizados === "undefined") {
       jogador.plantiosRealizados = 0;
@@ -136,6 +144,25 @@ io.on("connection", (socket) => {
     } else {
       console.log("Tipo incompatível com o campo.");
     }
+  });
+
+  socket.on("virarCartas", (salaId) => {
+    const sala = salas[salaId];
+    const jogador = sala?.jogadores.find(j => j.id === socket.id);
+    if (!sala || !jogador || sala.cartasViradas.length > 0) return;
+
+    if (socket.id !== sala.turnoAtual) return; // Apenas quem está no turno
+
+    if ((jogador.plantiosRealizados || 0) < 1) return; // Precisa ter plantado ao menos 1x
+
+    // Virar 2 cartas do topo do baralho
+    sala.cartasViradas = [];
+    for (let i = 0; i < 2; i++) {
+      const carta = sala.baralho.pop();
+      if (carta) sala.cartasViradas.push(carta);
+    }
+
+    io.to(salaId).emit("estadoAtualizado", sala);
   });
 
   socket.on("disconnect", () => {
