@@ -44,6 +44,41 @@ function criarBaralho() {
   return baralho;
 }
 
+function removerCartas(jogador, cartas, sala) {
+  for (const carta of cartas) {
+    if (carta.origem === "mao") {
+      const index = jogador.mao.findIndex(c => c.tipo === carta.carta.tipo);
+      if (index !== -1) jogador.mao.splice(index, 1);
+    } else if (carta.origem === "mesa") {
+      const index = sala.cartasViradas.findIndex(c => c.tipo === carta.carta.tipo);
+      if (index !== -1) sala.cartasViradas.splice(index, 1);
+    }
+  }
+}
+
+function plantarCartas(jogador, cartas) {
+  cartas.forEach(carta => {
+    const campo1 = jogador.campos[0];
+    const campo2 = jogador.campos[1];
+    
+    const podePlantarNoCampo1 = campo1.length === 0 || campo1.every(c => c.tipo === carta.carta.tipo);
+    const podePlantarNoCampo2 = campo2.length === 0 || campo2.every(c => c.tipo === carta.carta.tipo);
+
+    if (podePlantarNoCampo1) {
+      campo1.push(carta.carta);
+    } else if (podePlantarNoCampo2) {
+      campo2.push(carta.carta);
+    } else {
+      // Vender o campo com menos cartas
+      const campoParaVender = campo1.length >= campo2.length ? campo1 : campo2;
+
+      // Aqui você pode adicionar lógica de pontuação se quiser TODO
+      campoParaVender.length = 0; // limpa o campo (vende)
+      campoParaVender.push(carta.carta); // planta a nova carta no campo limpo
+    }
+  });
+}
+
 io.on("connection", (socket) => {
 
   socket.on("entrarNaSala", ({ salaId, nome }) => {
@@ -54,6 +89,7 @@ io.on("connection", (socket) => {
         estado: "esperando",
         turnoAtual: null, // ID do jogador da vez
         cartasViradas: [],
+        trocasPendentes: []
       };
     }
 
@@ -85,13 +121,14 @@ io.on("connection", (socket) => {
           id: j.id,
           nome: j.nome,
           mao: j.id === jogador.id ? j.mao : [], // só mostra a própria mão
-          campos: [[], []],
+          campos: j.id === jogador.id ? j.campos : [[],[]],
           plantiosRealizados: j.plantiosRealizados || 0
         })),
         estado: sala.estado,
         cartasRestantes: sala.baralho.length,
         turnoAtual: sala.turnoAtual,
         cartasViradas: sala.cartasViradas,
+        trocasPendentes: sala.trocasPendentes,
       };
 
       io.to(jogador.id).emit("estadoAtualizado", estadoPersonalizado);
@@ -162,6 +199,58 @@ io.on("connection", (socket) => {
       if (carta) sala.cartasViradas.push(carta);
     }
 
+    io.to(salaId).emit("estadoAtualizado", sala);
+  });
+
+  socket.on("proporTroca", ({ salaId, paraJogadorId, cartasEnviadas, cartasRecebidas }) => {
+    const sala = salas[salaId];
+    const de = sala.jogadores.find(j => j.id === socket.id);
+    const para = sala.jogadores.find(j => j.id === paraJogadorId);
+
+    if (!sala || !de || !para) return;
+    if (socket.id !== sala.turnoAtual) return;
+
+    // Ex: validar se cartas fazem parte das 2 cartas da mesa
+    // ou de cartas extras permitidas
+    sala.trocasPendentes.push({
+      de: de.id,
+      para: para.id,
+      cartasEnviadas,
+      cartasRecebidas,
+      status: "pendente"
+    });
+
+    // Notificar os dois envolvidos
+    io.to(para.id).emit("trocaProposta", {
+      ...sala,
+      de: de.nome,
+      cartasEnviadas,
+      cartasRecebidas
+    });
+  });
+
+  socket.on("responderTroca", ({ salaId, aceita, deJogadorId }) => {
+    const sala = salas[salaId];
+    const proposta = sala.trocasPendentes.find(t => t.de === deJogadorId && t.para === socket.id && t.status === 'pendente');
+    const para = sala.jogadores.find(j => j.id === socket.id);
+    const de = sala.jogadores.find(j => j.id === deJogadorId);
+
+    if (!sala || !proposta || !para || !de) return;
+    if (aceita) {
+      // Remover cartas de cada jogador
+      removerCartas(de, proposta.cartasEnviadas.filter(c => c.origem === "mao"), sala);
+      removerCartas(de, proposta.cartasEnviadas.filter(c => c.origem === "mesa"), sala);
+      removerCartas(para, proposta.cartasRecebidas.filter(c => c.origem === "mao"), sala);
+      removerCartas(para, proposta.cartasRecebidas.filter(c => c.origem === "mesa"), sala);
+
+      // Plantar diretamente no campo do outro
+      plantarCartas(para, proposta.cartasEnviadas);
+      plantarCartas(de, proposta.cartasRecebidas);
+
+      proposta.status = "aceita";
+    } else {
+      proposta.status = "recusada";
+    }
     io.to(salaId).emit("estadoAtualizado", sala);
   });
 
