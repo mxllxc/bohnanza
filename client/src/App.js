@@ -78,6 +78,8 @@ function App() {
     setTrocaRecebida(null);
   }, [trocaRecebida]);
 
+  console.log(cartasEnviadas)
+
   if (!entrando) {
     return (
       <div>
@@ -143,7 +145,6 @@ function App() {
                   ))}
               </select>
 
-              <h4>Enviar essas cartas (da mesa e da mão):</h4>
               <div>
                 <h5>Cartas Viradas (Mesa):</h5>
                 {estado.cartasViradas?.map((carta, index) => (
@@ -163,6 +164,9 @@ function App() {
                     {estado.cartasViradas[index].tipo}
                   </label>
                 ))}
+                <button onClick={() => socket.emit("plantarCartasMesa", { salaId, cartas: cartasEnviadas?.filter(x => x.origem === 'mesa') })}>
+                  Plantar cartas selecionadas
+                </button>
               </div>
 
               <h4>Pedir essas cartas:</h4>

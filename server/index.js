@@ -142,15 +142,27 @@ io.on("connection", (socket) => {
     if (socket.id !== sala.turnoAtual) return; // segurança
 
     const idxAtual = sala.jogadores.findIndex(j => j.id === sala.turnoAtual);
+    const jogadorAtual = sala.jogadores[idxAtual];
+
+    // 🃏 Dá 3 cartas do topo do baralho para o jogador atual
+    for (let i = 0; i < 3; i++) {
+      const carta = sala.baralho.shift();
+      if (carta) {
+        jogadorAtual.mao.push(carta);
+      }
+    }
+
+    // 🔁 Passa o turno
     const proximo = (idxAtual + 1) % sala.jogadores.length;
-
     sala.turnoAtual = sala.jogadores[proximo].id;
-    sala.cartasViradas = [];
 
+    // 🧹 Limpa mesa e reset de plantios
+    sala.cartasViradas = [];
     sala.jogadores.forEach(j => {
       j.plantiosRealizados = 0;
     });
 
+    // 📡 Envia novo estado
     io.to(salaId).emit("estadoAtualizado", sala);
   });
 
@@ -181,6 +193,15 @@ io.on("connection", (socket) => {
     } else {
       console.log("Tipo incompatível com o campo.");
     }
+  });
+
+  socket.on("plantarCartasMesa", ({ salaId, cartas }) => {
+    const sala = salas[salaId];
+    const jogador = sala.jogadores.find(j => j.id === socket.id)
+    console.log(jogador)
+    removerCartas(jogador, cartas, sala);
+    plantarCartas(jogador, cartas)
+    io.to(salaId).emit("estadoAtualizado", sala);
   });
 
   socket.on("virarCartas", (salaId) => {
